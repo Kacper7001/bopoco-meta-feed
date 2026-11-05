@@ -1,0 +1,5 @@
+dist/
+public/
+*.tmp
+.shopify_token*
+__pycache__/
