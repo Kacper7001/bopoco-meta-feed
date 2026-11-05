@@ -4,7 +4,8 @@ Kazdy aktywny wariant to jeden wiersz, a warianty produktu sa spiete przez
 item_group_id. Wszystkie zdjecia z karty produktu trafiaja do kazdego wariantu:
 pierwsze do image_link, reszta do additional_image_link.
 
-Wynik: jeden plik bopoco_meta_feed.csv w katalogu --out.
+Wynik w katalogu --out: bopoco_meta_feed.csv i bopoco_meta_feed.xml (RSS 2.0).
+Oba pliki maja te same dane, a do katalogu podpina sie tylko jeden z nich.
 
 id to numeryczne ID wariantu Shopify, takie samo jak w eksporcie katalogu.
 Nie wolno go zmieniac: po nim Meta laczy produkt z dotychczasowa historia.
@@ -21,11 +22,14 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 SHOP = "bopoco.myshopify.com"
 API_URL = f"https://{SHOP}/admin/api/2025-10/graphql.json"
 BRAND = "BOPOCO"
+STORE_URL = "https://bopoco.pl"
+GOOGLE_NS = "http://base.google.com/ns/1.0"
 CURRENCY = "PLN"
 MAX_ADDITIONAL_IMAGES = 20
 MAX_TITLE = 200
@@ -119,7 +123,9 @@ def rich_text_to_plain(value):
 
 
 def clean(text):
-    return re.sub(r"\s+", " ", text or "").strip()
+    # Znaki sterujace sa niedozwolone w XML.
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text or "")
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def build_description(product, material):
@@ -196,6 +202,27 @@ def write_csv(path, rows):
     temporary.replace(path)
 
 
+def write_xml(path, rows):
+    ET.register_namespace("g", GOOGLE_NS)
+    rss = ET.Element("rss", version="2.0")
+    channel = ET.SubElement(rss, "channel")
+    ET.SubElement(channel, "title").text = BRAND
+    ET.SubElement(channel, "link").text = STORE_URL
+    ET.SubElement(channel, "description").text = f"Katalog produktów {BRAND}"
+
+    for row in rows:
+        item = ET.SubElement(channel, "item")
+        for field in FIELDS:
+            # W XML kazde zdjecie dodatkowe to osobny znacznik.
+            values = row[field].split(",") if field == "additional_image_link" else [row[field]]
+            for value in filter(None, values):
+                ET.SubElement(item, f"{{{GOOGLE_NS}}}{field}").text = value
+
+    temporary = path.with_suffix(".tmp")
+    ET.ElementTree(rss).write(temporary, encoding="utf-8", xml_declaration=True)
+    temporary.replace(path)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", default=str(Path(__file__).resolve().parent / "dist"))
@@ -209,6 +236,7 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     write_csv(out / "bopoco_meta_feed.csv", rows)
+    write_xml(out / "bopoco_meta_feed.xml", rows)
 
     print(f"Produkty: {len(products)}, warianty w feedzie: {len(rows)}, pominiete: {len(skipped)}")
     for title in skipped:

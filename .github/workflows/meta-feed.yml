@@ -31,7 +31,7 @@ jobs:
           git init -q -b gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add bopoco_meta_feed.csv
+          git add bopoco_meta_feed.csv bopoco_meta_feed.xml
           git commit -q -m "Update feed"
           git push -q --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
         env:
